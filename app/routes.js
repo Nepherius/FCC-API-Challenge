@@ -1,6 +1,22 @@
 var moment = require('moment');
 var validUrl = require('valid-url');
 var Url = require('../app/models/url');
+var multer = require('multer');
+var upload = multer({
+    dest: './public/uploads',
+    limits: {
+        files: 1,
+        fields: 1,
+        fileSize: 10000
+    }, // Limit Uploads to a few image types
+    fileFilter: function fileFilter(req, file, cb) {
+        if (file.mimetype !== 'image/png' && file.mimetype !== 'image/jpg' && file.mimetype !== 'image/jpeg') {
+            req.multerImageValidation = 'just images please';
+            return cb(null, false);
+        }
+        return cb(null, true);
+    }
+}).single('upload');
 
 module.exports = function(app) {
     app.get('/', function(req, res) {
@@ -108,6 +124,37 @@ module.exports = function(app) {
                 });
             }
             return res.redirect(result.originalUrl);
+        });
+    });
+
+    /************************* File Metadata Microservice *************************/
+    app.get('/fileservice', function(req, res) {
+        res.render('fileservice');
+    });
+
+    app.post('/uploadfile', function(req, res, next) {
+        upload(req, res, function(err) {
+            if (err) {
+                console.log(err);
+                if (err.code === 'LIMIT_FILE_SIZE') {
+                    return res.json({
+                        reply: 'fileSize'
+                    });
+                }
+                return res.json({
+                    reply: 'failed'
+                });
+            }
+            if (req.multerImageValidation) {
+                return res.json({
+                    reply: 'wrongType'
+                });
+            } else {
+                return res.json({
+                    reply: 'success',
+                    fileSize: req.file.size
+                });
+            }
         });
     });
 };
