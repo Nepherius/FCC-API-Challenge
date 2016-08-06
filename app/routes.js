@@ -1,6 +1,12 @@
+/* jshint esversion: 6 */ //JsLint fix
+/* jshint node: true */
+"use strict";
+
 var moment = require('moment');
+var Search = require('bing.search');
 var validUrl = require('valid-url');
 var Url = require('../app/models/url');
+var SearchHistory = require('../app/models/searchHistory');
 var multer = require('multer');
 var upload = multer({
     dest: './public/uploads',
@@ -156,5 +162,52 @@ module.exports = function(app) {
                 });
             }
         });
+    });
+
+    /************************* Image Search Abstraction Layer *************************/
+    app.get('/imgsearch', function(req, res) {
+        res.render('imgsearch');
+    });
+
+    app.get('/latest/imgsearch', function(req, res) {
+        SearchHistory.find({},{'query':1, 'date' : 1, '_id':0}, function(err, result) {
+            if (err) throw err;
+            res.json(result);
+            // Limit Results to the last 10 Searches
+        }).limit(10);
+    });
+
+    app.get('/imgsearch/:query', function(req, res) {
+        const query = req.params.query;
+        const offset = req.query.offset || 10;
+        const search = new Search(process.env.BingKey);
+        let filteredResults = [];
+
+        search.images(query, {
+                top: offset
+            },
+            function(err, results) {
+                if (err) throw err;
+
+                results.map(function(e) {
+                    filteredResults.push({
+                        imgUrl: e.url,
+                        title: e.title,
+                        pageUrl: e.sourceUrl
+                    });
+                });
+
+                const searchEntry = new SearchHistory();
+                searchEntry.query = query;
+                searchEntry.date = Date.now();
+                searchEntry.save(function(err) {
+                    if (err) throw (err);
+                });
+
+                return res.json(filteredResults);
+
+            }
+        );
+
     });
 };
